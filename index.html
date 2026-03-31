@@ -2,62 +2,53 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>ChessMind - Интеллектуальный Анализ</title>
+    <title>ChessMind - Проект Сафронова Мирослава</title>
     <style>
-        :root { --bg: #1a1a1a; --card: #252525; --accent: #4facfe; --white: #f0d9b5; --black: #b58863; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #eee; display: flex; justify-content: center; padding: 20px; margin: 0; }
-        .wrapper { max-width: 500px; width: 100%; }
-        .card { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; margin-bottom: 20px; }
-        h1 { color: var(--accent); text-align: center; margin-top: 0; text-transform: uppercase; font-size: 1.5rem; }
-        
-        /* Сетка доски */
-        .board { display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; aspect-ratio: 1; border: 5px solid #333; user-select: none; }
-        .cell { display: flex; justify-content: center; align-items: center; font-size: 40px; cursor: pointer; position: relative; }
-        .cell.white { background: var(--white); }
-        .cell.black { background: var(--black); }
-        .cell.selected { background: #ffeb3b !important; }
-        .cell:hover { opacity: 0.9; }
-
-        .eval-panel { display: flex; justify-content: space-between; align-items: center; background: #111; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid var(--accent); }
-        .score { font-size: 1.8rem; font-weight: bold; color: #00f2fe; }
-        .status { font-size: 0.9rem; color: #888; }
-        p { line-height: 1.5; font-size: 0.95rem; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .card { background: #252525; border-radius: 12px; padding: 20px; width: 100%; max-width: 450px; box-shadow: 0 5px 20px rgba(0,0,0,0.5); margin-bottom: 20px; border: 1px solid #333; }
+        h1 { color: #4facfe; margin: 0 0 10px 0; font-size: 24px; text-align: center; }
+        /* Шахматная доска на CSS Grid */
+        .board { display: grid; grid-template-columns: repeat(8, 1fr); border: 2px solid #555; width: 100%; aspect-ratio: 1; }
+        .cell { display: flex; justify-content: center; align-items: center; font-size: 40px; cursor: pointer; user-select: none; }
+        .white { background: #f0d9b5; }
+        .black { background: #b58863; }
+        .selected { background: #ffeb3b !important; }
+        /* Панель анализа */
+        .eval-bar { display: flex; justify-content: space-between; align-items: center; background: #111; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #4facfe; }
+        .score { font-size: 28px; font-weight: bold; color: #00f2fe; }
+        .status { font-size: 14px; color: #888; }
     </style>
 </head>
 <body>
 
-<div class="wrapper">
     <div class="card">
         <h1>ChessMind</h1>
-        <p><strong>Теоретический модуль:</strong> Испанская партия. Используйте доску ниже для интерактивного обучения. Встроенный алгоритм оценивает преимущество в реальном времени.</p>
+        <p style="font-size: 14px; color: #ccc;">Продукт к индивидуальному проекту. Теория: Испанская партия (1.e4 e5 2.Nf3 Nc6 3.Bb5). Анализ позиций в реальном времени.</p>
     </div>
 
     <div class="card">
-        <div id="status" class="status">Ход белых</div>
         <div id="board" class="board"></div>
-        <div class="eval-panel">
+        <div class="eval-bar">
             <div>
-                <div class="status">Оценка позиции (CP)</div>
-                <div id="eval" class="score">+0.15</div>
+                <div class="status" id="turn-status">Ход белых</div>
+                <div id="eval-val" class="score">+0.15</div>
             </div>
-            <button onclick="resetGame()" style="background: #444; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer;">Сброс</button>
+            <button onclick="location.reload()" style="padding: 8px 15px; cursor: pointer; border-radius: 5px; border: none; background: #444; color: white;">Сброс</button>
         </div>
     </div>
-</div>
 
 <script>
-    const boardElement = document.getElementById('board');
-    const evalElement = document.getElementById('eval');
-    const statusElement = document.getElementById('status');
+    const boardEl = document.getElementById('board');
+    const scoreEl = document.getElementById('eval-val');
+    const statusEl = document.getElementById('turn-status');
 
-    // Фигуры (Unicode)
+    // Юникод-символы фигур (не требуют загрузки картинок)
     const pieces = {
         'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
         'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
     };
 
-    // Начальная расстановка
-    let gameState = [
+    let boardState = [
         ['r','n','b','q','k','b','n','r'],
         ['p','p','p','p','p','p','p','p'],
         [null,null,null,null,null,null,null,null],
@@ -69,76 +60,54 @@
     ];
 
     let selected = null;
-    let turn = 'white';
+    let turn = 'W';
 
-    function createBoard() {
-        boardElement.innerHTML = '';
+    function render() {
+        boardEl.innerHTML = '';
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const cell = document.createElement('div');
-                cell.className = `cell ${(r + c) % 2 === 0 ? 'white' : 'black'}`;
-                cell.dataset.r = r;
-                cell.dataset.c = c;
-                cell.innerText = pieces[gameState[r][c]] || '';
+                cell.className = `cell ${(r+c)%2===0 ? 'white' : 'black'}`;
+                if (selected && selected.r === r && selected.c === c) cell.classList.add('selected');
                 
-                if (selected && selected.r === r && selected.c === c) {
-                    cell.classList.add('selected');
-                }
-
-                cell.onclick = () => handleCellClick(r, c);
-                boardElement.appendChild(cell);
+                cell.innerText = pieces[boardState[r][c]] || '';
+                cell.onclick = () => handleClick(r, c);
+                boardEl.appendChild(cell);
             }
         }
-        updateEval();
+        calculateEval();
     }
 
-    function handleCellClick(r, c) {
-        const piece = gameState[r][c];
-
+    function handleClick(r, c) {
+        const p = boardState[r][c];
         if (selected) {
-            // Ход
             if (selected.r !== r || selected.c !== c) {
-                gameState[r][c] = gameState[selected.r][selected.c];
-                gameState[selected.r][selected.c] = null;
-                turn = turn === 'white' ? 'black' : 'white';
-                statusElement.innerText = turn === 'white' ? 'Ход белых' : 'Ход черных';
+                boardState[r][c] = boardState[selected.r][selected.c];
+                boardState[selected.r][selected.c] = null;
+                turn = turn === 'W' ? 'B' : 'W';
+                statusEl.innerText = turn === 'W' ? 'Ход белых' : 'Ход черных';
             }
             selected = null;
-        } else {
-            if (piece) {
-                const isWhite = piece === piece.toUpperCase();
-                if ((isWhite && turn === 'white') || (!isWhite && turn === 'black')) {
-                    selected = {r, c};
-                }
-            }
+        } else if (p && ((turn === 'W' && p === p.toUpperCase()) || (turn === 'B' && p === p.toLowerCase()))) {
+            selected = {r, c};
         }
-        createBoard();
+        render();
     }
 
-    // Простой алгоритм оценки (имитация NNUE для проекта)
-    function updateEval() {
-        let score = 0;
-        const weights = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0 };
-        
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                const p = gameState[r][c];
-                if (!p) continue;
-                const val = weights[p.toUpperCase()];
-                score += (p === p.toUpperCase()) ? val : -val;
-            }
-        }
-        
-        // Немного рандома для имитации "раздумий" ИИ
-        const displayScore = (score + (Math.random() * 0.4 - 0.2)).toFixed(2);
-        evalElement.innerText = (displayScore > 0 ? '+' : '') + displayScore;
+    function calculateEval() {
+        const vals = { 'P': 1, 'N': 3, 'B': 3.25, 'R': 5, 'Q': 9, 'K': 0 };
+        let s = 0;
+        boardState.flat().forEach(p => {
+            if (!p) return;
+            const v = vals[p.toUpperCase()];
+            s += (p === p.toUpperCase()) ? v : -v;
+        });
+        const rand = (Math.random() * 0.4 - 0.2); // Имитация "колебаний" движка
+        const final = (s + rand).toFixed(2);
+        scoreEl.innerText = (final > 0 ? '+' : '') + final;
     }
 
-    function resetGame() {
-        location.reload();
-    }
-
-    createBoard();
+    render();
 </script>
 </body>
 </html>
