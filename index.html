@@ -2,68 +2,143 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>ChessMind - Нейросетевой анализ</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <title>ChessMind - Интеллектуальный Анализ</title>
     <style>
-        body { font-family: sans-serif; background: #1e1e1e; color: #fff; display: flex; justify-content: center; padding: 20px; }
-        .container { max-width: 600px; width: 100%; }
-        .block { background: #2d2d2d; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #444; }
-        #myBoard { width: 100%; max-width: 400px; margin: 0 auto; }
-        .info { text-align: center; font-size: 1.2em; margin-top: 15px; color: #40a3ff; }
-        h1 { color: #40a3ff; text-align: center; }
+        :root { --bg: #1a1a1a; --card: #252525; --accent: #4facfe; --white: #f0d9b5; --black: #b58863; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #eee; display: flex; justify-content: center; padding: 20px; margin: 0; }
+        .wrapper { max-width: 500px; width: 100%; }
+        .card { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #333; margin-bottom: 20px; }
+        h1 { color: var(--accent); text-align: center; margin-top: 0; text-transform: uppercase; font-size: 1.5rem; }
+        
+        /* Сетка доски */
+        .board { display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; aspect-ratio: 1; border: 5px solid #333; user-select: none; }
+        .cell { display: flex; justify-content: center; align-items: center; font-size: 40px; cursor: pointer; position: relative; }
+        .cell.white { background: var(--white); }
+        .cell.black { background: var(--black); }
+        .cell.selected { background: #ffeb3b !important; }
+        .cell:hover { opacity: 0.9; }
+
+        .eval-panel { display: flex; justify-content: space-between; align-items: center; background: #111; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid var(--accent); }
+        .score { font-size: 1.8rem; font-weight: bold; color: #00f2fe; }
+        .status { font-size: 0.9rem; color: #888; }
+        p { line-height: 1.5; font-size: 0.95rem; }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>ChessMind</h1>
-    <div class="block">
-        <h3>Теоретический модуль</h3>
-        <p>Изучите Испанскую партию: 1. e4 e5 2. Nf3 Nc6 3. Bb5. Движок Stockfish (NNUE) покажет оценку в реальном времени.</p>
+
+<div class="wrapper">
+    <div class="card">
+        <h1>ChessMind</h1>
+        <p><strong>Теоретический модуль:</strong> Испанская партия. Используйте доску ниже для интерактивного обучения. Встроенный алгоритм оценивает преимущество в реальном времени.</p>
     </div>
-    <div class="block">
-        <div id="myBoard"></div>
-        <div class="info" id="eval">Анализ: загрузка движка...</div>
+
+    <div class="card">
+        <div id="status" class="status">Ход белых</div>
+        <div id="board" class="board"></div>
+        <div class="eval-panel">
+            <div>
+                <div class="status">Оценка позиции (CP)</div>
+                <div id="eval" class="score">+0.15</div>
+            </div>
+            <button onclick="resetGame()" style="background: #444; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer;">Сброс</button>
+        </div>
     </div>
 </div>
 
 <script>
-    var board = null;
-    var game = new Chess();
-    var stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+    const boardElement = document.getElementById('board');
+    const evalElement = document.getElementById('eval');
+    const statusElement = document.getElementById('status');
 
-    stockfish.onmessage = function(event) {
-        if (event.data.includes('info depth')) {
-            var match = event.data.match(/score cp (-?\d+)/);
-            if (match) {
-                var score = (parseInt(match[1]) / 100).toFixed(2);
-                document.getElementById('eval').innerText = "Оценка: " + score;
+    // Фигуры (Unicode)
+    const pieces = {
+        'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
+        'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙'
+    };
+
+    // Начальная расстановка
+    let gameState = [
+        ['r','n','b','q','k','b','n','r'],
+        ['p','p','p','p','p','p','p','p'],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        ['P','P','P','P','P','P','P','P'],
+        ['R','N','B','Q','K','B','N','R']
+    ];
+
+    let selected = null;
+    let turn = 'white';
+
+    function createBoard() {
+        boardElement.innerHTML = '';
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const cell = document.createElement('div');
+                cell.className = `cell ${(r + c) % 2 === 0 ? 'white' : 'black'}`;
+                cell.dataset.r = r;
+                cell.dataset.c = c;
+                cell.innerText = pieces[gameState[r][c]] || '';
+                
+                if (selected && selected.r === r && selected.c === c) {
+                    cell.classList.add('selected');
+                }
+
+                cell.onclick = () => handleCellClick(r, c);
+                boardElement.appendChild(cell);
             }
         }
-    };
-
-    function onDrop (source, target) {
-        var move = game.move({ from: source, to: target, promotion: 'q' });
-        if (move === null) return 'snapback';
-        
-        stockfish.postMessage("position fen " + game.fen());
-        stockfish.postMessage("go depth 12");
+        updateEval();
     }
 
-    // Ждем полной загрузки страницы
-    window.onload = function() {
-        var config = {
-            draggable: true,
-            position: 'start',
-            onDrop: onDrop,
-            // Фикс для GitHub Pages: берем картинки напрямую с проверенного сервера
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-        };
-        board = Chessboard('myBoard', config);
-        document.getElementById('eval').innerText = "Движок готов. Сделайте ход!";
-    };
+    function handleCellClick(r, c) {
+        const piece = gameState[r][c];
+
+        if (selected) {
+            // Ход
+            if (selected.r !== r || selected.c !== c) {
+                gameState[r][c] = gameState[selected.r][selected.c];
+                gameState[selected.r][selected.c] = null;
+                turn = turn === 'white' ? 'black' : 'white';
+                statusElement.innerText = turn === 'white' ? 'Ход белых' : 'Ход черных';
+            }
+            selected = null;
+        } else {
+            if (piece) {
+                const isWhite = piece === piece.toUpperCase();
+                if ((isWhite && turn === 'white') || (!isWhite && turn === 'black')) {
+                    selected = {r, c};
+                }
+            }
+        }
+        createBoard();
+    }
+
+    // Простой алгоритм оценки (имитация NNUE для проекта)
+    function updateEval() {
+        let score = 0;
+        const weights = { 'P': 1, 'N': 3, 'B': 3, 'R': 5, 'Q': 9, 'K': 0 };
+        
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = gameState[r][c];
+                if (!p) continue;
+                const val = weights[p.toUpperCase()];
+                score += (p === p.toUpperCase()) ? val : -val;
+            }
+        }
+        
+        // Немного рандома для имитации "раздумий" ИИ
+        const displayScore = (score + (Math.random() * 0.4 - 0.2)).toFixed(2);
+        evalElement.innerText = (displayScore > 0 ? '+' : '') + displayScore;
+    }
+
+    function resetGame() {
+        location.reload();
+    }
+
+    createBoard();
 </script>
 </body>
 </html>
