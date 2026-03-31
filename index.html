@@ -2,6 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
     <title>ChessMind — Нейросетевой анализ</title>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
@@ -151,6 +153,32 @@
             color: #4facfe;
             margin-top: 0;
         }
+    @media screen and (max-width: 768px) {
+        .chess-container {
+            flex-direction: column; /* Складываем доску и полоску в столбик */
+            align-items: center;
+        }
+
+        #board {
+            width: 95vw; /* Доска почти на всю ширину экрана */
+            max-width: none;
+        }
+
+        .eval-bar {
+            width: 95vw; /* Полоска тоже широкая */
+            height: 25px !important;
+            margin-top: 10px;
+        }
+
+        /* Увеличиваем кнопки, чтобы по ним было легко попадать пальцем */
+        .nav-btn {
+            padding: 12px 15px;
+            font-size: 16px;
+            flex: 1;
+        }
+
+        h1 { font-size: 24px; }
+    }
     </style>
 </head>
 <body>
@@ -239,6 +267,35 @@
     
     let isAiThinking = false; 
     let lastEval = 0; 
+
+    // Полифил для поддержки мобильных устройств
+    function touchHandler(event) {
+    var touches = event.changedTouches,
+        first = touches[0],
+        type = "";
+    switch(event.type) {
+        case "touchstart": type = "mousedown"; break;
+        case "touchmove":  type = "mousemove"; break;        
+        case "touchend":   type = "mouseup";   break;
+        default: return;
+    }
+
+    var simulatedEvent = document.createEvent("MouseEvent");
+    simulatedEvent.initMouseEvent(type, true, true, window, 1, 
+                              first.screenX, first.screenY, 
+                              first.clientX, first.clientY, false, 
+                              false, false, false, 0, null);
+
+    first.target.dispatchEvent(simulatedEvent);
+}
+
+function initTouch() {
+    document.addEventListener("touchstart", touchHandler, true);
+    document.addEventListener("touchmove", touchHandler, true);
+    document.addEventListener("touchend", touchHandler, true);
+    document.addEventListener("touchcancel", touchHandler, true);    
+}
+$(document).ready(initTouch);
 
     async function initStockfish() {
         const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
